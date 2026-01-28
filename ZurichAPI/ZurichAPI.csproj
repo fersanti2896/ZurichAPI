@@ -7,8 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Core\ZurichAPI.Infrastructure\ZurichAPI.Infrastructure.csproj" />
     <ProjectReference Include="..\Infraestructure\ZurichAPI.Data.SQL\ZurichAPI.Data.SQL.csproj" />
-    <ProjectReference Include="..\ZurichAPI.Infrastructure\ZurichAPI.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
