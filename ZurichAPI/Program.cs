@@ -6,6 +6,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using ZurichAPI.Data.SQL.Implementations;
 using ZurichAPI.Data.SQL.Interfaces;
+using ZurichAPI.Infrastructure.Implementations;
+using ZurichAPI.Infrastructure.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,9 +15,13 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(buil
        o => o.UseCompatibilityLevel(120).CommandTimeout(Convert.ToInt32(TimeSpan.FromMinutes(10).TotalSeconds))));
 
 // Core
+builder.Services.AddTransient<IUserRepository, UserRepository>();
+builder.Services.AddTransient<IClientRepository, ClientRepository>();
 
 // Infraestructure
 builder.Services.AddTransient<IDataAccessLogs, DataAccessLogs>();
+builder.Services.AddTransient<IDataAccessUser, DataAccessUser>();
+builder.Services.AddTransient<IDataAccessClient, DataAccessClient>();
 
 // Add services to the container.
 

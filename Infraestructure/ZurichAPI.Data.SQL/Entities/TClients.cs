@@ -13,22 +13,22 @@ public class TClients : TDataGeneric
     public int UserId { get; set; }
 
     [Required, MaxLength(10)]
-    public string IdentificationNumber { get; set; } = null!;
+    public long IdentificationNumber { get; set; }
 
     [Required, MaxLength(80)]
-    public string Name { get; set; } = null!;
+    public string Name { get; set; }
 
     [Required, MaxLength(80)]
-    public string LastName { get; set; } = null!;
+    public string LastName { get; set; }
 
     [Required, MaxLength(80)]
-    public string SurName { get; set; } = null!;
+    public string SurName { get; set; }
 
     [Required, MaxLength(150)]
-    public string Email { get; set; } = null!;
+    public string Email { get; set; }
 
     [Required, MaxLength(30)]
-    public string Phone { get; set; } = null!;
+    public string Phone { get; set; }
 
     public virtual TUsers? User { get; set; }
 }
