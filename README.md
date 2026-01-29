@@ -76,7 +76,7 @@ El administrador puede:
 Cliente
 
  ```text
-Email: wendys@gmail.com
+Email: wendy@gmail.com
 Password: Fersa169*
 ```
 
