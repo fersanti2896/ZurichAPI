@@ -39,6 +39,25 @@ public class ClientController : ControllerBase
     }
 
     /// <summary>
+    /// Obtiene información del cliente
+    /// </summary>
+    [Authorize]
+    [HttpGet]
+    [Route("MyClientProfile")]
+    public async Task<IActionResult> MyClientProfile()
+    {
+        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+
+        var result = await IClientRepository.GetMyClientProfile(userId);
+
+        if (result.Error != null)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+
+    /// <summary>
     /// Crea un cliente
     /// </summary>
     /// <param name="request"></param>

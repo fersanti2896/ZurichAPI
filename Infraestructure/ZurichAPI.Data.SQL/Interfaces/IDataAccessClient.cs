@@ -12,4 +12,5 @@ public interface IDataAccessClient
     Task<ReplyResponse> UpdateClientByAdmin(UpdateClientRequest request, int userId);
     Task<ClientsResponse> GetAllClients(GetClientsRequest request, int userId);
     Task<ReplyResponse> DeleteClient(DeleteClienteRequest request, int userId);
+    Task<ClientResponse> GetMyClientProfile(int userId);
 }

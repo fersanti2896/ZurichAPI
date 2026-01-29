@@ -97,6 +97,14 @@ public class ClientRepository : IClientRepository
         }
     }
 
+    public async Task<ClientResponse> GetMyClientProfile(int userId)
+    {
+        var result = await ExecuteWithLogging(() => IDataAccessClient.GetMyClientProfile(userId), "GetMyClientProfile", userId);
+
+        return result;
+    }
+
+
     public async Task<ReplyResponse> DeleteClient(DeleteClienteRequest request, int userId)
     {
         var result = await ExecuteWithLogging(() => IDataAccessClient.DeleteClient(request, userId), "DeleteClient", userId);

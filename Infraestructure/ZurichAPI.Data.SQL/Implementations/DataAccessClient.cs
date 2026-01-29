@@ -508,6 +508,124 @@ public class DataAccessClient : IDataAccessClient
         }
     }
 
+    public async Task<ClientResponse> GetMyClientProfile(int userId)
+    {
+        ClientResponse response = new();
+
+        try
+        {
+
+            var clientId = await Context.TClients
+                .Where(x => x.UserId == userId && x.Status == 1)
+                .Select(x => x.ClientId)
+                .FirstOrDefaultAsync();
+
+            if (clientId <= 0)
+            {
+                response.Error = new ErrorDTO
+                {
+                    Code = 404,
+                    Message = "No se encontró un cliente."
+                };
+                return response;
+            }
+
+            var query =
+                from c in Context.TClients
+                join ca in Context.TClientsAddress on c.ClientId equals ca.ClientId into addr
+                from ca in addr.DefaultIfEmpty()
+                join pc in Context.TPostalCodes on
+                    new { ca.Cve_CodigoPostal, ca.Cve_Estado, ca.Cve_Municipio, ca.Cve_Colonia }
+                    equals new
+                    {
+                        Cve_CodigoPostal = pc.d_codigo,
+                        Cve_Estado = pc.c_estado,
+                        Cve_Municipio = pc.c_mnpio,
+                        Cve_Colonia = pc.id_asenta_cpcons
+                    } into postal
+                from pc in postal.DefaultIfEmpty()
+                where c.Status == 1 && c.ClientId == clientId
+                select new
+                {
+                    c.ClientId,
+                    c.Name,
+                    c.LastName,
+                    c.SurName,
+                    c.Email,
+                    c.IdentificationNumber,
+                    Phone = c.Phone,
+                    c.Status,
+
+                    Cve_CodigoPostal = ca != null ? ca.Cve_CodigoPostal : null,
+                    Cve_Estado = ca != null ? ca.Cve_Estado : null,
+                    Cve_Municipio = ca != null ? ca.Cve_Municipio : null,
+                    Cve_Colonia = ca != null ? ca.Cve_Colonia : null,
+                    Street = ca != null ? ca.Street : null,
+                    ExtNbr = ca != null ? ca.ExtNbr : null,
+                    InnerNbr = ca != null ? ca.InnerNbr : null,
+
+                    d_asenta = pc != null ? pc.d_asenta : null,
+                    D_mnpio = pc != null ? pc.D_mnpio : null,
+                    d_estado = pc != null ? pc.d_estado : null,
+                    d_codigo = pc != null ? pc.d_codigo : null
+                };
+
+            var raw = await query.FirstOrDefaultAsync();
+
+            if (raw == null)
+            {
+                response.Error = new ErrorDTO
+                {
+                    Code = 404,
+                    Message = "Cliente no encontrado."
+                };
+                return response;
+            }
+
+            response.Result = new ClientDTO
+            {
+                ClientId = raw.ClientId,
+                FullName = $"{raw.Name} {raw.LastName} {raw.SurName}".Replace("  ", " ").Trim(),
+                Email = raw.Email,
+                PhoneNumber = raw.Phone,
+                Status = raw.Status,
+                IdentificationNumber = raw.IdentificationNumber,
+
+                Cve_CodigoPostal = raw.Cve_CodigoPostal ?? string.Empty,
+                Cve_Estado = raw.Cve_Estado ?? string.Empty,
+                Cve_Municipio = raw.Cve_Municipio ?? string.Empty,
+                Cve_Colonia = raw.Cve_Colonia ?? string.Empty,
+                Street = raw.Street ?? string.Empty,
+                ExtNbr = raw.ExtNbr ?? string.Empty,
+                InnerNbr = raw.InnerNbr ?? string.Empty,
+
+                Address = raw.Street != null
+                    ? $"{raw.Street} #{raw.ExtNbr}, {raw.d_asenta}, {raw.D_mnpio}, {raw.d_estado}, CP {raw.d_codigo}"
+                    : null
+            };
+        }
+        catch (Exception ex)
+        {
+            await IDataAccessLogs.Create(new LogsDTO
+            {
+                IdUser = userId,
+                Module = "ZurichAPI-DataAccessClient",
+                Action = "GetMyClientProfile",
+                Message = $"Exception: {ex.Message}",
+                InnerException = $"Inner: {ex.InnerException?.Message}"
+            });
+
+            response.Error = new ErrorDTO
+            {
+                Code = 500,
+                Message = ex.InnerException?.Message ?? ex.Message
+            };
+        }
+
+        return response;
+    }
+
+
     #region Métodos privados
     private static ReplyResponse SetError(ReplyResponse response, int code, string message)
     {
