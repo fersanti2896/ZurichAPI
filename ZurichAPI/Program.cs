@@ -18,11 +18,15 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(buil
 // Core
 builder.Services.AddTransient<IUserRepository, UserRepository>();
 builder.Services.AddTransient<IClientRepository, ClientRepository>();
+builder.Services.AddTransient<IPolicyRepository, PolicyRepository>();
+builder.Services.AddTransient<ICatalogsRepository, CatalogsRepository>();
 
 // Infraestructure
 builder.Services.AddTransient<IDataAccessLogs, DataAccessLogs>();
 builder.Services.AddTransient<IDataAccessUser, DataAccessUser>();
 builder.Services.AddTransient<IDataAccessClient, DataAccessClient>();
+builder.Services.AddTransient<IDataAccessPolicy, DataAccessPolicy>();
+builder.Services.AddTransient<IDataAccessCatalogs, DataAccessCatalogs>();
 
 // Add services to the container.
 

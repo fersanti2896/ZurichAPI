@@ -13,7 +13,6 @@ public class ClientRepository : IClientRepository
     private readonly IDataAccessClient IDataAccessClient;
     private IDataAccessLogs IDataAccessLogs;
     private readonly ICacheService Cache;
-
     private const string ClientsAllKey = "clients:all:status1";
 
     public ClientRepository(IDataAccessClient iDataAccessClient, IDataAccessLogs iDataAccessLogs, ICacheService cache)
@@ -23,19 +22,34 @@ public class ClientRepository : IClientRepository
         Cache = cache;
     }
 
-    public Task<ReplyResponse> CreateClient(CreateClientRequest request, int userId)
+    public async Task<ReplyResponse> CreateClient(CreateClientRequest request, int userId)
     {
-        return ExecuteWithLogging(() => IDataAccessClient.CreateClient(request, userId), "CreateClient", userId);
+        var result = await ExecuteWithLogging(() => IDataAccessClient.CreateClient(request, userId), "CreateClient", userId);
+
+        if (result.Error == null)
+            await Cache.RemoveAsync(ClientsAllKey);
+
+        return result;
     }
 
-    public Task<ReplyResponse> UpdateMyProfile(UpdateMyProfileRequest request, int userId)
+    public async Task<ReplyResponse> UpdateMyProfile(UpdateMyProfileRequest request, int userId)
     {
-        return ExecuteWithLogging(() => IDataAccessClient.UpdateMyProfile(request, userId), "UpdateMyProfile", userId);
+        var result = await ExecuteWithLogging(() => IDataAccessClient.UpdateMyProfile(request, userId), "UpdateMyProfile", userId);
+
+        if (result.Error == null)
+            await Cache.RemoveAsync(ClientsAllKey);
+
+        return result;
     }
 
-    public Task<ReplyResponse> UpdateClientByAdmin(UpdateClientRequest request, int userId)
+    public async Task<ReplyResponse> UpdateClientByAdmin(UpdateClientRequest request, int userId)
     {
-        return ExecuteWithLogging(() => IDataAccessClient.UpdateClientByAdmin(request, userId), "UpdateClientByAdmin", userId);
+        var result = await ExecuteWithLogging(() => IDataAccessClient.UpdateClientByAdmin(request, userId), "UpdateClientByAdmin", userId);
+
+        if (result.Error == null)
+            await Cache.RemoveAsync(ClientsAllKey);
+
+        return result;
     }
 
     public async Task<ClientsResponse> GetAllClients(int userId)
