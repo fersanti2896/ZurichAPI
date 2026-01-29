@@ -53,6 +53,11 @@ Para obtener la url productiva favor de enviar un correo a fersanti2896@gmail.co
 appsettings.json
 ```
 
+### Correr la imagen de redis de docker
+```
+    docker run -d --name redis-local -p 6379:6379 redis
+```
+
 ### Credenciales
 Administrador
 
