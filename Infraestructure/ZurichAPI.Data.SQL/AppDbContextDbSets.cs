@@ -12,4 +12,6 @@ public partial class AppDbContext
     public virtual DbSet<TPermissions> TPermissions { get; set; }
     public virtual DbSet<TRolePermissions> TRolePermissions { get; set; }
     public virtual DbSet<TClients> TClients { get; set; }
+    public virtual DbSet<TPostalCodes> TPostalCodes { get; set; }
+    public virtual DbSet<TClientsAddress> TClientsAddress { get; set; }
 }

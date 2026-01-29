@@ -121,7 +121,7 @@ public class DataAccessUser : IDataAccessUser
                 return response;
             }
 
-            var accessToken = GenerateJwtToken(user);
+            var accessToken = await GenerateJwtToken(user);
             var refreshToken = GenerateRefreshToken();
             var expiration = NowCDMX.AddDays(1);
 
@@ -145,7 +145,7 @@ public class DataAccessUser : IDataAccessUser
                 RefreshToken = refreshToken,
                 FullName = $"{user.FirstName} {user.LastName} {user.MLastName ?? string.Empty}",
                 RoleId = user.RoleId,
-                RoleDescription = user.Role?.Name
+                RoleDescription = user.Role?.Description
             };
         }
         catch (Exception ex)
@@ -204,7 +204,7 @@ public class DataAccessUser : IDataAccessUser
             }
 
             // Generar nuevos tokens
-            var newAccessToken = GenerateJwtToken(user);
+            var newAccessToken = await GenerateJwtToken(user);
             var newRefreshToken = GenerateRefreshToken();
             var newExpiration = NowCDMX.AddDays(2);
 
@@ -226,7 +226,7 @@ public class DataAccessUser : IDataAccessUser
                 RefreshToken = newRefreshToken,
                 FullName = $"{user.FirstName} {user.LastName} {user.MLastName ?? string.Empty}",
                 RoleId = user.RoleId,
-                RoleDescription = user.Role?.Name
+                RoleDescription = user.Role?.Description
             };
         }
         catch (Exception ex)
@@ -260,20 +260,36 @@ public class DataAccessUser : IDataAccessUser
         return response;
     }
 
-    private string GenerateJwtToken(TUsers user)
+    private async Task<List<string>> GetPermissionsByRoleIdAsync(int roleId)
+    {
+        return await (from rp in Context.TRolePermissions
+                      join p in Context.TPermissions on rp.PermissionId equals p.PermissionId
+                      where rp.RoleId == roleId && p.Status == 1
+                      select p.Key)
+                     .Distinct()
+                     .ToListAsync();
+    }
+
+    private async Task<string> GenerateJwtToken(TUsers user)
     {
         var jwtSettings = _configuration.GetSection("JwtSettings");
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new[]
+        var permissions = await GetPermissionsByRoleIdAsync(user.RoleId);
+
+        var claims = new List<Claim>
         {
             new Claim("UserId", user.UserId.ToString()),
-            new Claim("Role", user.RoleId.ToString()),
+            new Claim("RoleId", user.RoleId.ToString()),
+            new Claim(ClaimTypes.Role, user.Role.Name),
             new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        foreach (var perm in permissions)
+            claims.Add(new Claim("perm", perm));
 
         var token = new JwtSecurityToken(
             issuer: jwtSettings["Issuer"],
@@ -293,33 +309,5 @@ public class DataAccessUser : IDataAccessUser
         rng.GetBytes(randomNumber);
 
         return Convert.ToBase64String(randomNumber);
-    }
-
-    private async Task<long> GenerateUniqueIdentificationNumberAsync()
-    {
-        for (int i = 0; i < 10; i++)
-        {
-            long candidate = Generate10DigitNumber();
-
-            bool exists = await Context.TClients
-                .AnyAsync(c => c.IdentificationNumber == candidate);
-
-            if (!exists)
-                return candidate;
-        }
-
-        throw new Exception("No fue posible generar un IdentificationNumber único.");
-    }
-
-    private static long Generate10DigitNumber()
-    {
-        using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
-        byte[] bytes = new byte[8];
-        rng.GetBytes(bytes);
-
-        ulong value = BitConverter.ToUInt64(bytes, 0);
-        long number = (long)(value % 9000000000UL) + 1000000000L;
-
-        return number;
     }
 }

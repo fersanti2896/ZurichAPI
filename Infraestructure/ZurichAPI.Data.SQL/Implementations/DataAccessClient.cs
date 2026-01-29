@@ -1,6 +1,13 @@
 ﻿
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using ZurichAPI.Data.SQL.Entities;
 using ZurichAPI.Data.SQL.Interfaces;
+using ZurichAPI.Models.DTOs;
+using ZurichAPI.Models.Helpers;
+using ZurichAPI.Models.Request.Clients;
+using ZurichAPI.Models.Response;
+using ZurichAPI.Models.Response.Clients;
 
 namespace ZurichAPI.Data.SQL.Implementations;
 
@@ -18,4 +25,445 @@ public class DataAccessClient : IDataAccessClient
         IDataAccessLogs = iDataAccessLogs;
         _configuration = configurations;
     }
+
+    public async Task<ReplyResponse> CreateClient(CreateClientRequest request, int userId)
+    {
+        ReplyResponse response = new();
+
+        try
+        {
+            var clientRoleId = await Context.TRol
+                .Where(r => r.Name == "Client" && r.Status == 1)
+                .Select(r => r.RoleId)
+                .FirstOrDefaultAsync();
+
+            if (clientRoleId == 0)
+                return SetError(response, 500, "No existe el rol 'Client'");
+
+            var emailNormalized = request.Email.Trim().ToUpper();
+            var emailExists = await Context.TUsers.AnyAsync(u => u.Email.ToUpper() == emailNormalized);
+
+            if (emailExists)
+                return SetError(response, 400, "Ya existe un usuario con el mismo correo.");
+
+            using var tx = await Context.Database.BeginTransactionAsync();
+
+            var passwordNormalized = request.Password.Trim().ToUpper();
+            var encryptedPassword = EncryptDecrypt.EncryptString(passwordNormalized);
+
+            var user = new TUsers
+            {
+                FirstName = request.FirstName.Trim(),
+                LastName = request.LastName.Trim(),
+                MLastName = request.MLastName.Trim() ?? string.Empty,
+                Email = request.Email.Trim(),
+                PasswordHash = encryptedPassword,
+                RoleId = clientRoleId,
+                Status = 1,
+                CreateDate = NowCDMX,
+                CreateUser = userId
+            };
+
+            await Context.TUsers.AddAsync(user);
+            await Context.SaveChangesAsync();
+
+            var identificationNumber = await GenerateUniqueIdentificationNumberAsync();
+
+            var client = new TClients
+            {
+                UserId = user.UserId,
+                IdentificationNumber = identificationNumber,
+                Name = request.FirstName.Trim(),
+                LastName = request.LastName.Trim(),
+                SurName = request.MLastName.Trim() ?? string.Empty,
+                Email = request.Email.Trim(),
+                Phone = request.Phone.Trim(),
+                Status = 1,
+                CreateDate = NowCDMX,
+                CreateUser = userId
+            };
+
+            await Context.TClients.AddAsync(client);
+            await Context.SaveChangesAsync(); 
+
+
+            var address = new TClientsAddress
+            {
+                ClientId = client.ClientId,
+                Cve_CodigoPostal = request.Cve_CodigoPostal.Trim(),
+                Cve_Estado = request.Cve_Estado.Trim(),
+                Cve_Municipio = request.Cve_Municipio.Trim(),
+                Cve_Colonia = request.Cve_Colonia.Trim(),
+                Street = request.Street.Trim(),
+                ExtNbr = request.ExtNbr.Trim(),
+                InnerNbr = request.InnerNbr?.Trim(),
+                Status = 1,
+                CreateDate = NowCDMX,
+                CreateUser = userId
+            };
+
+            await Context.TClientsAddress.AddAsync(address);
+            await Context.SaveChangesAsync();
+
+            await tx.CommitAsync();
+
+            response.Result = new ReplyDTO
+            {
+                Status = true,
+                Msg = "Cliente creado"
+            };
+
+            return response;
+        }
+        catch (Exception ex)
+        {
+            await IDataAccessLogs.Create(new LogsDTO
+            {
+                IdUser = 1,
+                Module = "ZurichAPI-DataAccessUser",
+                Action = "CreateClient",
+                Message = $"Exception: {ex.Message}",
+                InnerException = $"Inner: {ex.InnerException?.Message}"
+            });
+
+            response.Error = new ErrorDTO
+            {
+                Code = 500,
+                Message = "Ocurrió un error al procesar la solicitud."
+            };
+
+            return response;
+        }
+    }
+
+    public async Task<ReplyResponse> UpdateMyProfile(UpdateMyProfileRequest request, int userId)
+    {
+        ReplyResponse response = new();
+        using var transaction = await Context.Database.BeginTransactionAsync();
+
+        try
+        {
+            var client = await Context.TClients
+                .FirstOrDefaultAsync(c => c.UserId == userId && c.Status == 1);
+
+            if (client == null)
+                return SetError(response, 404, "Cliente no encontrado.");
+
+            client.Phone = request.Phone.Trim();
+            client.UpdateDate = NowCDMX;
+            client.UpdateUser = userId;
+
+            var address = await Context.TClientsAddress
+                .FirstOrDefaultAsync(a => a.ClientId == client.ClientId && a.Status == 1);
+
+            if (address != null)
+            {
+                address.Cve_CodigoPostal = request.Cve_CodigoPostal.Trim();
+                address.Cve_Estado = request.Cve_Estado.Trim();
+                address.Cve_Municipio = request.Cve_Municipio.Trim();
+                address.Cve_Colonia = request.Cve_Colonia.Trim();
+                address.Street = request.Street.Trim();
+                address.ExtNbr = request.ExtNbr.Trim();
+                address.InnerNbr = request.InnerNbr?.Trim();
+                address.UpdateDate = NowCDMX;
+                address.UpdateUser = userId;
+            }
+            else
+            {
+                var newAddress = new TClientsAddress
+                {
+                    ClientId = client.ClientId,
+                    Cve_CodigoPostal = request.Cve_CodigoPostal.Trim(),
+                    Cve_Estado = request.Cve_Estado.Trim(),
+                    Cve_Municipio = request.Cve_Municipio.Trim(),
+                    Cve_Colonia = request.Cve_Colonia.Trim(),
+                    Street = request.Street.Trim(),
+                    ExtNbr = request.ExtNbr.Trim(),
+                    InnerNbr = request.InnerNbr?.Trim(),
+                    Status = 1,
+                    CreateDate = NowCDMX,
+                    CreateUser = userId
+                };
+
+                await Context.TClientsAddress.AddAsync(newAddress);
+            }
+
+            await Context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            response.Result = new ReplyDTO
+            {
+                Status = true,
+                Msg = "Perfil actualizado correctamente."
+            };
+
+            return response;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+
+            await IDataAccessLogs.Create(new LogsDTO
+            {
+                IdUser = userId,
+                Module = "ZurichAPI-DataAccessUser",
+                Action = "UpdateMyProfile",
+                Message = $"Exception: {ex.Message}",
+                InnerException = $"Inner: {ex.InnerException?.Message}"
+            });
+
+            response.Error = new ErrorDTO
+            {
+                Code = 500,
+                Message = "Ocurrió un error al procesar la solicitud."
+            };
+
+            return response;
+        }
+    }
+
+    public async Task<ReplyResponse> UpdateClientByAdmin(UpdateClientRequest request, int userId)
+    {
+        ReplyResponse response = new();
+        using var tx = await Context.Database.BeginTransactionAsync();
+
+        try
+        {
+            var client = await Context.TClients
+                .FirstOrDefaultAsync(c => c.ClientId == request.ClientId && c.Status == 1);
+
+            if (client == null)
+                return SetError(response, 404, "Cliente no encontrado.");
+
+            var user = await Context.TUsers
+                .FirstOrDefaultAsync(u => u.UserId == client.UserId && u.Status == 1);
+
+            if (user == null)
+                return SetError(response, 404, "Usuario asociado al cliente no encontrado.");
+
+            // Información del Cliente
+            client.Name = request.FirstName.Trim();
+            client.LastName = request.LastName.Trim();
+            client.SurName = request.MLastName?.Trim() ?? string.Empty;
+            client.Phone = request.Phone.Trim();
+            client.UpdateDate = NowCDMX;
+            client.UpdateUser = userId;
+
+            // Información del Usuario
+            user.FirstName = request.FirstName.Trim();
+            user.LastName = request.LastName.Trim();
+            user.MLastName = request.MLastName?.Trim() ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(request.Password))
+            {
+                var passwordNormalized = request.Password.Trim().ToUpper();
+                user.PasswordHash = EncryptDecrypt.EncryptString(passwordNormalized);
+            }
+
+            user.UpdateDate = NowCDMX;
+            user.UpdateUser = userId;
+
+            // Edita la dirección del cliente
+            var address = await Context.TClientsAddress
+                .FirstOrDefaultAsync(a => a.ClientId == client.ClientId && a.Status == 1);
+
+            if (address != null)
+            {
+                address.Cve_CodigoPostal = request.Cve_CodigoPostal.Trim();
+                address.Cve_Estado = request.Cve_Estado.Trim();
+                address.Cve_Municipio = request.Cve_Municipio.Trim();
+                address.Cve_Colonia = request.Cve_Colonia.Trim();
+                address.Street = request.Street.Trim();
+                address.ExtNbr = request.ExtNbr.Trim();
+                address.InnerNbr = request.InnerNbr?.Trim();
+                address.UpdateDate = NowCDMX;
+                address.UpdateUser = userId;
+            }
+            else
+            {
+                var newAddress = new TClientsAddress
+                {
+                    ClientId = client.ClientId,
+                    Cve_CodigoPostal = request.Cve_CodigoPostal.Trim(),
+                    Cve_Estado = request.Cve_Estado.Trim(),
+                    Cve_Municipio = request.Cve_Municipio.Trim(),
+                    Cve_Colonia = request.Cve_Colonia.Trim(),
+                    Street = request.Street.Trim(),
+                    ExtNbr = request.ExtNbr.Trim(),
+                    InnerNbr = request.InnerNbr?.Trim(),
+                    Status = 1,
+                    CreateDate = NowCDMX,
+                    CreateUser = userId
+                };
+
+                await Context.TClientsAddress.AddAsync(newAddress);
+            }
+
+            await Context.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            response.Result = new ReplyDTO
+            {
+                Status = true,
+                Msg = "Cliente actualizado correctamente."
+            };
+
+            return response;
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync();
+
+            await IDataAccessLogs.Create(new LogsDTO
+            {
+                IdUser = userId,
+                Module = "ZurichAPI-DataAccessClient",
+                Action = "UpdateClientByAdmin",
+                Message = $"Exception: {ex.Message}",
+                InnerException = $"Inner: {ex.InnerException?.Message}"
+            });
+
+            response.Error = new ErrorDTO
+            {
+                Code = 500,
+                Message = "Ocurrió un error al procesar la solicitud."
+            };
+
+            return response;
+        }
+    }
+
+    public async Task<ClientsResponse> GetAllClients(int userId)
+    {
+        ClientsResponse response = new();
+
+        try
+        {
+            var raw = await (from c in Context.TClients
+                             join ca in Context.TClientsAddress on c.ClientId equals ca.ClientId into addr
+                             from ca in addr.DefaultIfEmpty()
+                             join pc in Context.TPostalCodes on
+                                new { ca.Cve_CodigoPostal, ca.Cve_Estado, ca.Cve_Municipio, ca.Cve_Colonia }
+                                equals new
+                                {
+                                    Cve_CodigoPostal = pc.d_codigo,
+                                    Cve_Estado = pc.c_estado,
+                                    Cve_Municipio = pc.c_mnpio,
+                                    Cve_Colonia = pc.id_asenta_cpcons
+                                } into postal
+                             from pc in postal.DefaultIfEmpty()
+                             where c.Status == 1
+                             select new
+                             {
+                                 c.ClientId,
+                                 c.Name,
+                                 c.LastName,
+                                 c.SurName,
+                                 c.Email,
+                                 Phone = c.Phone,
+                                 c.Status,
+
+                                 Cve_CodigoPostal = ca != null ? ca.Cve_CodigoPostal : null,
+                                 Cve_Estado = ca != null ? ca.Cve_Estado : null,
+                                 Cve_Municipio = ca != null ? ca.Cve_Municipio : null,
+                                 Cve_Colonia = ca != null ? ca.Cve_Colonia : null,
+                                 Street = ca != null ? ca.Street : null,
+                                 ExtNbr = ca != null ? ca.ExtNbr : null,
+                                 InnerNbr = ca != null ? ca.InnerNbr : null,
+
+                                 d_asenta = pc != null ? pc.d_asenta : null,
+                                 D_mnpio = pc != null ? pc.D_mnpio : null,
+                                 d_estado = pc != null ? pc.d_estado : null,
+                                 d_codigo = pc != null ? pc.d_codigo : null
+                             }).ToListAsync();
+
+            var clients = raw
+                .Select(x => new ClientDTO
+                {
+                    ClientId = x.ClientId,
+                    FullName = $"{x.Name} {x.LastName} {x.SurName}".Replace("  ", " ").Trim(),
+                    Email = x.Email,
+                    PhoneNumber = x.Phone,
+                    Status = x.Status,
+
+                    Cve_CodigoPostal = x.Cve_CodigoPostal ?? string.Empty,
+                    Cve_Estado = x.Cve_Estado ?? string.Empty,
+                    Cve_Municipio = x.Cve_Municipio ?? string.Empty,
+                    Cve_Colonia = x.Cve_Colonia ?? string.Empty,
+                    Street = x.Street ?? string.Empty,
+                    ExtNbr = x.ExtNbr ?? string.Empty,
+                    InnerNbr = x.InnerNbr ?? string.Empty,
+
+                    Address = x.Street != null
+                        ? $"{x.Street} #{x.ExtNbr}, {x.d_asenta}, {x.D_mnpio}, {x.d_estado}, CP {x.d_codigo}"
+                        : null
+                })
+                .OrderBy(x => x.FullName)
+                .ToList();
+
+            response.Result = clients;
+        }
+        catch (Exception ex)
+        {
+            await IDataAccessLogs.Create(new LogsDTO
+            {
+                IdUser = userId,
+                Module = "ZurichAPI-DataAccessClient",
+                Action = "GetAllClients",
+                Message = $"Exception: {ex.Message}",
+                InnerException = $"Inner: {ex.InnerException?.Message}"
+            });
+
+            response.Error = new ErrorDTO
+            {
+                Code = 500,
+                Message = $"Error Exception: {ex.InnerException?.Message ?? ex.Message}"
+            };
+        }
+
+        return response;
+    }
+
+
+    #region Métodos privados
+    private static ReplyResponse SetError(ReplyResponse response, int code, string message)
+    {
+        response.Error = new ErrorDTO
+        {
+            Code = code,
+            Message = message
+        };
+
+        return response;
+    }
+
+    private async Task<long> GenerateUniqueIdentificationNumberAsync()
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            long candidate = Generate10DigitNumber();
+
+            bool exists = await Context.TClients
+                .AnyAsync(c => c.IdentificationNumber == candidate);
+
+            if (!exists)
+                return candidate;
+        }
+
+        throw new Exception("No fue posible generar un IdentificationNumber único.");
+    }
+
+    private static long Generate10DigitNumber()
+    {
+        using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+        byte[] bytes = new byte[8];
+        rng.GetBytes(bytes);
+
+        ulong value = BitConverter.ToUInt64(bytes, 0);
+        long number = (long)(value % 9000000000UL) + 1000000000L;
+
+        return number;
+    }
+
+    #endregion
 }

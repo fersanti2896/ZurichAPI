@@ -1,4 +1,5 @@
 ﻿
+using ZurichAPI.Models.Request.Clients;
 using ZurichAPI.Models.Request.User;
 using ZurichAPI.Models.Response;
 using ZurichAPI.Models.Response.User;

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using ZurichAPI.Data.SQL;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -59,9 +60,33 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("profile.self.edit", policy =>
+        policy.RequireClaim("perm", "profile.self.edit"));
+
+    options.AddPolicy("policies.self.view", policy =>
+        policy.RequireClaim("perm", "policies.self.view"));
+
+    options.AddPolicy("policies.self.cancel", policy =>
+        policy.RequireClaim("perm", "policies.self.cancel"));
+
+    options.AddPolicy("clients.manage", policy =>
+        policy.RequireClaim("perm", "clients.manage"));
+
+    options.AddPolicy("policies.manage", policy =>
+        policy.RequireClaim("perm", "policies.manage"));
+});
+
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Zurich API ", Version = "v1" });
+
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    c.IncludeXmlComments(xmlPath);
+
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "Encabezado de autorizacion JSON Web Token utilizando el esquema Bearer. Ejemplo: \"Bearer {token}\"",
@@ -87,6 +112,16 @@ builder.Services.AddSwaggerGen(c =>
                     }
                 });
 });
+
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis");
+    options.InstanceName = "ZurichAPI:";
+});
+
+builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+
+
 
 var app = builder.Build();
 

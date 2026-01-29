@@ -2,9 +2,13 @@
 
 namespace ZurichAPI.Models.Request.Clients;
 
-public class CreateClientRequest
+public class UpdateClientRequest
 {
     private const string NameRegex = @"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+$";
+
+    [Required(ErrorMessage = "ClientId es requerido.")]
+    [Range(1, int.MaxValue, ErrorMessage = "ClientId inválido.")]
+    public int ClientId { get; set; }
 
     [Required(ErrorMessage = "El nombre es requerido.")]
     [MaxLength(30, ErrorMessage = "El nombre no puede exceder 30 caracteres.")]
@@ -20,15 +24,8 @@ public class CreateClientRequest
     [RegularExpression(NameRegex, ErrorMessage = "El apellido materno solo puede contener letras y espacios.")]
     public string? MLastName { get; set; }
 
-    [Required(ErrorMessage = "El correo electrónico es requerido.")]
-    [EmailAddress(ErrorMessage = "El correo electrónico no tiene un formato válido.")]
-    [MaxLength(150, ErrorMessage = "El correo electrónico no puede exceder 150 caracteres.")]
-    public string Email { get; set; } = null!;
-
-    [Required(ErrorMessage = "La contraseña es requerida.")]
-    [MinLength(6, ErrorMessage = "La contraseña debe tener al menos 6 caracteres.")]
-    [MaxLength(100, ErrorMessage = "La contraseña no puede exceder 100 caracteres.")]
-    public string Password { get; set; } = null!;
+    [RegularExpression(@"^$|^.{6,100}$", ErrorMessage = "La contraseña debe tener entre 6 y 100 caracteres.")]
+    public string? Password { get; set; }
 
     [Required(ErrorMessage = "El teléfono es requerido.")]
     [RegularExpression(@"^\d{10}$", ErrorMessage = "El teléfono debe contener exactamente 10 dígitos.")]

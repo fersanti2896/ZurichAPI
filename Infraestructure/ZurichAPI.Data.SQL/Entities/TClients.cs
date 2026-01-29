@@ -27,7 +27,7 @@ public class TClients : TDataGeneric
     [Required, MaxLength(150)]
     public string Email { get; set; }
 
-    [Required, MaxLength(30)]
+    [Required, MaxLength(10)]
     public string Phone { get; set; }
 
     public virtual TUsers? User { get; set; }

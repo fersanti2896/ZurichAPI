@@ -49,6 +49,9 @@ public class UserController : Controller
     [Route("Login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
+        if (!ModelState.IsValid)
+            return BadRequest(BuildModelStateError());
+
         var result = await IUserRepository.Login(request);
 
         if (result.Error != null)
