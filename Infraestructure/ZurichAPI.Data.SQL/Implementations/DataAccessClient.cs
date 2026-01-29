@@ -333,51 +333,78 @@ public class DataAccessClient : IDataAccessClient
         }
     }
 
-    public async Task<ClientsResponse> GetAllClients(int userId)
+    public async Task<ClientsResponse> GetAllClients(GetClientsRequest request, int userId)
     {
         ClientsResponse response = new();
 
         try
         {
-            var raw = await (from c in Context.TClients
-                             join ca in Context.TClientsAddress on c.ClientId equals ca.ClientId into addr
-                             from ca in addr.DefaultIfEmpty()
-                             join pc in Context.TPostalCodes on
-                                new { ca.Cve_CodigoPostal, ca.Cve_Estado, ca.Cve_Municipio, ca.Cve_Colonia }
-                                equals new
-                                {
-                                    Cve_CodigoPostal = pc.d_codigo,
-                                    Cve_Estado = pc.c_estado,
-                                    Cve_Municipio = pc.c_mnpio,
-                                    Cve_Colonia = pc.id_asenta_cpcons
-                                } into postal
-                             from pc in postal.DefaultIfEmpty()
-                             where c.Status == 1
-                             select new
-                             {
-                                 c.ClientId,
-                                 c.Name,
-                                 c.LastName,
-                                 c.SurName,
-                                 c.Email,
-                                 Phone = c.Phone,
-                                 c.Status,
+            var query =
+                from c in Context.TClients
+                join ca in Context.TClientsAddress on c.ClientId equals ca.ClientId into addr
+                from ca in addr.DefaultIfEmpty()
+                join pc in Context.TPostalCodes on
+                    new { ca.Cve_CodigoPostal, ca.Cve_Estado, ca.Cve_Municipio, ca.Cve_Colonia }
+                    equals new
+                    {
+                        Cve_CodigoPostal = pc.d_codigo,
+                        Cve_Estado = pc.c_estado,
+                        Cve_Municipio = pc.c_mnpio,
+                        Cve_Colonia = pc.id_asenta_cpcons
+                    } into postal
+                from pc in postal.DefaultIfEmpty()
+                where c.Status == 1
+                select new
+                {
+                    c.ClientId,
+                    c.Name,
+                    c.LastName,
+                    c.SurName,
+                    c.Email,
+                    c.IdentificationNumber,
+                    Phone = c.Phone,
+                    c.Status,
 
-                                 Cve_CodigoPostal = ca != null ? ca.Cve_CodigoPostal : null,
-                                 Cve_Estado = ca != null ? ca.Cve_Estado : null,
-                                 Cve_Municipio = ca != null ? ca.Cve_Municipio : null,
-                                 Cve_Colonia = ca != null ? ca.Cve_Colonia : null,
-                                 Street = ca != null ? ca.Street : null,
-                                 ExtNbr = ca != null ? ca.ExtNbr : null,
-                                 InnerNbr = ca != null ? ca.InnerNbr : null,
+                    Cve_CodigoPostal = ca != null ? ca.Cve_CodigoPostal : null,
+                    Cve_Estado = ca != null ? ca.Cve_Estado : null,
+                    Cve_Municipio = ca != null ? ca.Cve_Municipio : null,
+                    Cve_Colonia = ca != null ? ca.Cve_Colonia : null,
+                    Street = ca != null ? ca.Street : null,
+                    ExtNbr = ca != null ? ca.ExtNbr : null,
+                    InnerNbr = ca != null ? ca.InnerNbr : null,
 
-                                 d_asenta = pc != null ? pc.d_asenta : null,
-                                 D_mnpio = pc != null ? pc.D_mnpio : null,
-                                 d_estado = pc != null ? pc.d_estado : null,
-                                 d_codigo = pc != null ? pc.d_codigo : null
-                             }).ToListAsync();
+                    d_asenta = pc != null ? pc.d_asenta : null,
+                    D_mnpio = pc != null ? pc.D_mnpio : null,
+                    d_estado = pc != null ? pc.d_estado : null,
+                    d_codigo = pc != null ? pc.d_codigo : null
+                };
 
-            var clients = raw
+            if (!string.IsNullOrWhiteSpace(request.Name))
+            {
+                var search = request.Name.Trim().ToLower();
+
+                query = query.Where(x => (
+                                            ((x.Name ?? "") + " " + (x.LastName ?? "") + " " + (x.SurName ?? ""))
+                                            .ToLower()
+                                         ).Contains(search)
+                                    );
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                query = query.Where(x => x.Email.Contains(request.Email));
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.IdentificationNumber))
+            {
+                long ident = long.Parse(request.IdentificationNumber);
+
+                query = query.Where(x => x.IdentificationNumber == ident);
+            }
+
+            var raw = await query.ToListAsync();
+
+            response.Result = raw
                 .Select(x => new ClientDTO
                 {
                     ClientId = x.ClientId,
@@ -385,7 +412,7 @@ public class DataAccessClient : IDataAccessClient
                     Email = x.Email,
                     PhoneNumber = x.Phone,
                     Status = x.Status,
-
+                    IdentificationNumber = x.IdentificationNumber,
                     Cve_CodigoPostal = x.Cve_CodigoPostal ?? string.Empty,
                     Cve_Estado = x.Cve_Estado ?? string.Empty,
                     Cve_Municipio = x.Cve_Municipio ?? string.Empty,
@@ -400,8 +427,6 @@ public class DataAccessClient : IDataAccessClient
                 })
                 .OrderBy(x => x.FullName)
                 .ToList();
-
-            response.Result = clients;
         }
         catch (Exception ex)
         {
@@ -417,13 +442,71 @@ public class DataAccessClient : IDataAccessClient
             response.Error = new ErrorDTO
             {
                 Code = 500,
-                Message = $"Error Exception: {ex.InnerException?.Message ?? ex.Message}"
+                Message = ex.InnerException?.Message ?? ex.Message
             };
         }
 
         return response;
     }
 
+    public async Task<ReplyResponse> DeleteClient(DeleteClienteRequest request, int userId)
+    {
+        var response = new ReplyResponse();
+
+        try
+        {
+            if (request.ClientId <= 0)
+                return SetError(response, 400, "El cliente no es válido.");
+
+            var client = await Context.TClients.FirstOrDefaultAsync(x => x.ClientId == request.ClientId && x.Status == 1);
+
+            if (client == null)
+                return SetError(response, 404, "No se encontró el cliente o ya está inactivo.");
+
+            // Se valida pólizas activas o con cancelación solicitada
+            var hasActiveOrPendingPolicies = await Context.TPolicys.AnyAsync(p => p.ClientId == request.ClientId
+                                                                             && p.Status == 1
+                                                                             && (p.PolicyStatusId == 1 || p.PolicyStatusId == 3));
+
+            if (hasActiveOrPendingPolicies)
+                return SetError(response, 409, "No se puede eliminar el cliente porque tiene pólizas activas o con cancelación solicitada.");
+
+            client.Status = 0;
+            client.UpdateDate = NowCDMX;
+            client.UpdateUser = userId;
+
+            var saved = await Context.SaveChangesAsync() > 0;
+            if (!saved)
+                return SetError(response, 500, "No fue posible eliminar el cliente.");
+
+            response.Result = new ReplyDTO
+            {
+                Status = true,
+                Msg = "Cliente eliminado correctamente."
+            };
+
+            return response;
+        }
+        catch (Exception ex)
+        {
+            await IDataAccessLogs.Create(new LogsDTO
+            {
+                IdUser = userId,
+                Module = "ZurichAPI-DataAccessClient",
+                Action = "DeleteClient",
+                Message = $"Exception: {ex.Message}",
+                InnerException = $"Inner: {ex.InnerException?.Message}"
+            });
+
+            response.Error = new ErrorDTO
+            {
+                Code = 500,
+                Message = ex.InnerException?.Message ?? ex.Message
+            };
+
+            return response;
+        }
+    }
 
     #region Métodos privados
     private static ReplyResponse SetError(ReplyResponse response, int code, string message)

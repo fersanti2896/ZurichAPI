@@ -24,13 +24,13 @@ public class ClientController : ControllerBase
     /// </summary>
     /// <returns></returns>
     [Authorize(Policy = "clients.manage")]
-    [HttpGet]
+    [HttpPost]
     [Route("AllClients")]
-    public async Task<IActionResult> GetAllClients()
+    public async Task<IActionResult> GetAllClients(GetClientsRequest request)
     {
         var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
 
-        var result = await IClientRepository.GetAllClients(userId);
+        var result = await IClientRepository.GetAllClients(request, userId);
 
         if (result.Error != null)
             return BadRequest(result);
@@ -102,6 +102,26 @@ public class ClientController : ControllerBase
         var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
 
         var result = await IClientRepository.UpdateClientByAdmin(request, userId);
+
+        if (result.Error != null)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Elimina un cliente siempre y cuando no tenga pólizas activadas
+    /// </summary>
+    /// <param name="clientId"></param>
+    /// <returns></returns>
+    [Authorize(Policy = "clients.manage")]
+    [HttpDelete]
+    [Route("DeleteClient")]
+    public async Task<IActionResult> DeleteClient(DeleteClienteRequest request)
+    {
+        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+
+        var result = await IClientRepository.DeleteClient(request, userId);
 
         if (result.Error != null)
             return BadRequest(result);

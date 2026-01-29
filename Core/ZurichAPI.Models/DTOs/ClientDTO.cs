@@ -4,7 +4,8 @@ namespace ZurichAPI.Models.DTOs;
 public class ClientDTO
 {
     public int ClientId { get; set; }
-    public string FullName { get; set; } = null!;       // FullName
+    public string FullName { get; set; }                   // FullName
+    public long IdentificationNumber { get; set; }       // Numero de Identificacion
     public string? Address { get; set; }                   // Dirección
     public string? PhoneNumber { get; set; }               // Teléfono de contacto
     public string? Email { get; set; }                     // Correo electrónico

@@ -16,4 +16,5 @@ public partial class AppDbContext
     public virtual DbSet<TClientsAddress> TClientsAddress { get; set; }
     public virtual DbSet<TPolicyStatuses> TPolicyStatuses { get; set; }
     public virtual DbSet<TPolicyTypes> TPolicyTypes { get; set; }
+    public virtual DbSet<TPolicys> TPolicys { get; set; }
 }

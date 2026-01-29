@@ -13,7 +13,7 @@ public class ClientRepository : IClientRepository
     private readonly IDataAccessClient IDataAccessClient;
     private IDataAccessLogs IDataAccessLogs;
     private readonly ICacheService Cache;
-    private const string ClientsAllKey = "clients:all:status1";
+    private const string ClientsVersionKey = "clients:version";
 
     public ClientRepository(IDataAccessClient iDataAccessClient, IDataAccessLogs iDataAccessLogs, ICacheService cache)
     {
@@ -27,7 +27,7 @@ public class ClientRepository : IClientRepository
         var result = await ExecuteWithLogging(() => IDataAccessClient.CreateClient(request, userId), "CreateClient", userId);
 
         if (result.Error == null)
-            await Cache.RemoveAsync(ClientsAllKey);
+            await BumpClientsCacheVersionAsync();
 
         return result;
     }
@@ -37,7 +37,7 @@ public class ClientRepository : IClientRepository
         var result = await ExecuteWithLogging(() => IDataAccessClient.UpdateMyProfile(request, userId), "UpdateMyProfile", userId);
 
         if (result.Error == null)
-            await Cache.RemoveAsync(ClientsAllKey);
+            await BumpClientsCacheVersionAsync();
 
         return result;
     }
@@ -47,28 +47,31 @@ public class ClientRepository : IClientRepository
         var result = await ExecuteWithLogging(() => IDataAccessClient.UpdateClientByAdmin(request, userId), "UpdateClientByAdmin", userId);
 
         if (result.Error == null)
-            await Cache.RemoveAsync(ClientsAllKey);
+            await BumpClientsCacheVersionAsync();
 
         return result;
     }
 
-    public async Task<ClientsResponse> GetAllClients(int userId)
+    public async Task<ClientsResponse> GetAllClients(GetClientsRequest request, int userId)
     {
         ClientsResponse response = new();
 
         try
         {
-            var cached = await Cache.GetAsync<List<ClientDTO>>(ClientsAllKey);
+            var version = await GetClientsCacheVersionAsync();
+            var cacheKey = BuildClientsKey(version, request);
+
+            var cached = await Cache.GetAsync<List<ClientDTO>>(cacheKey);
             if (cached != null)
             {
                 response.Result = cached;
                 return response;
             }
 
-            response = await IDataAccessClient.GetAllClients(userId);
+            response = await IDataAccessClient.GetAllClients(request, userId);
 
             if (response.Error == null && response.Result != null)
-                await Cache.SetAsync(ClientsAllKey, response.Result, TimeSpan.FromMinutes(2));
+                await Cache.SetAsync(cacheKey, response.Result, TimeSpan.FromMinutes(2));
 
             return response;
         }
@@ -92,6 +95,49 @@ public class ClientRepository : IClientRepository
 
             return response;
         }
+    }
+
+    public async Task<ReplyResponse> DeleteClient(DeleteClienteRequest request, int userId)
+    {
+        var result = await ExecuteWithLogging(() => IDataAccessClient.DeleteClient(request, userId), "DeleteClient", userId);
+
+        if (result.Error == null)
+            await BumpClientsCacheVersionAsync();
+        
+        return result;
+    }
+
+    #region Métodos privados
+
+    private static string NormalizeLower(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "null" : value.Trim().ToLowerInvariant();
+
+    private static string NormalizeUpper(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "null" : value.Trim().ToUpperInvariant();
+
+    private static string BuildClientsKey(int version, GetClientsRequest r)
+        => $"clients:v{version}:all:status1:" +
+           $"name:{NormalizeLower(r.Name)}:" +
+           $"email:{NormalizeLower(r.Email)}:" +
+           $"id:{NormalizeUpper(r.IdentificationNumber)}";
+
+    private async Task<int> GetClientsCacheVersionAsync()
+    {
+        var v = await Cache.GetAsync<int?>(ClientsVersionKey);
+
+        if (v == null || v <= 0)
+        {
+            await Cache.SetAsync(ClientsVersionKey, 1, TimeSpan.FromDays(30));
+            return 1;
+        }
+
+        return v.Value;
+    }
+
+    private async Task BumpClientsCacheVersionAsync()
+    {
+        var current = await GetClientsCacheVersionAsync();
+        await Cache.SetAsync(ClientsVersionKey, current + 1, TimeSpan.FromDays(30));
     }
 
     private async Task<T> ExecuteWithLogging<T>(Func<Task<T>> action, string actionName, int userId) where T : BaseResponse, new()
@@ -123,4 +169,5 @@ public class ClientRepository : IClientRepository
             return response;
         }
     }
+    #endregion
 }
