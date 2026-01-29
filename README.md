@@ -21,13 +21,13 @@ Este proyecto expone una API REST que maneja autenticación, roles, permisos, ge
 
 ## Requisitos
 
-Antes de ejecutar el proyecto asegúrate de tener instalado:
+Antes de ejecutar el proyecto se requiere:
 
 - .NET SDK 8
-- SQL Server (LocalDB o instancia local)
+- SQL Server
 - Visual Studio 2022 o superior
 - Git
-- Redis (opcional para entorno local, recomendado)
+- Redis (imagen de docker)
 
 ---
 
