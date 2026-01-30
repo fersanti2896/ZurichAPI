@@ -13,7 +13,7 @@ Este proyecto expone una API REST que maneja autenticación, roles, permisos, ge
 - SQL Server
 - Autenticación JWT
 - Redis (manejo de refresh tokens)
-- Arquitectura por capas (Controller, Repository, DataAccess)
+- Arquitectura hexagonal (Controller, Repository, DataAccess)
 - LINQ
 - C#
 
